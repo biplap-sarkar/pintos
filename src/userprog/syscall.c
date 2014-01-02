@@ -13,6 +13,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/page.h"
  
  
 static int sys_halt (void);
@@ -32,8 +33,6 @@ static int sys_close (int handle);
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t);
  
-/* Serializes file system operations. */
-static struct lock fs_lock;
  
 void
 syscall_init (void) 
@@ -98,6 +97,8 @@ syscall_handler (struct intr_frame *f)
 static bool
 verify_user (const void *uaddr) 
 {
+	//return (uaddr < PHYS_BASE 
+	//		&& page_for_addr(uaddr) != NULL);
   return (uaddr < PHYS_BASE
           && pagedir_get_page (thread_current ()->pagedir, uaddr) != NULL);
 }
@@ -343,7 +344,15 @@ sys_read (int handle, void *udst_, unsigned size)
       if (!verify_user (udst)) 
         {
           lock_release (&fs_lock);
-          thread_exit ();
+          struct page *p = page_for_addr(udst);
+          if(udst < PHYS_BASE && p != NULL){
+			if(page_in(udst)==false)
+				thread_exit();
+			lock_acquire (&fs_lock);
+		  }
+		  else
+			thread_exit();
+          //thread_exit ();
         }
 
       /* Read from file into page. */
@@ -393,7 +402,15 @@ sys_write (int handle, void *usrc_, unsigned size)
       if (!verify_user (usrc)) 
         {
           lock_release (&fs_lock);
-          thread_exit ();
+          struct page *p = page_for_addr(usrc);
+          if(usrc < PHYS_BASE && p != NULL){
+			if(page_in(usrc)==false)
+				thread_exit();
+			lock_acquire (&fs_lock);
+		  }
+		  else
+			thread_exit();
+          //thread_exit ();
         }
 
       /* Do the write. */

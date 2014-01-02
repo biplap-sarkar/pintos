@@ -93,6 +93,9 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  
+  /* Initialize frame manager */
+  frame_init();
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();

@@ -7,22 +7,45 @@
 #include "threads/synch.h"
 
 /* Virtual page. */
+enum mapping{
+	FILE,
+	SWAP,
+	MMAP
+};
 struct page 
   {
      void *addr;                 /* User virtual address. */
-
+	 struct hash_elem hash_elem; 
      struct frame *frame;        /* Page frame. */
-   
-     /* ...............          other struct members as necessary */     
+	
+     /* ...............          other struct members as necessary */ 
+     bool isloaded; 
+     enum mapping map_type;
+     // members for keeping file information
+     struct file *file;
+     off_t ofs;
+     uint32_t read_bytes;
+     uint32_t zero_bytes;
+     bool writable;
+     
+     // members for keeping swap information 
+	 block_sector_t page_sector; 
 
   };
 
 void page_exit (void);
 
 struct page *page_allocate (void *, bool read_only);
+bool page_allocate_file (void *vaddr, struct file *file, off_t ofs,
+	uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 void page_deallocate (void *vaddr);
 
+
+struct page *page_for_addr (const void *address);
+void page_table_init (struct hash *spt);
 bool page_in (void *fault_addr);
+bool page_in_from_file (struct page *p);
+bool page_in_from_swap (struct page *p);
 bool page_out (struct page *);
 bool page_accessed_recently (struct page *);
 
