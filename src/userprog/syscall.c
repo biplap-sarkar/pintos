@@ -14,6 +14,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "vm/page.h"
+#include "vm/mmap.h"
  
  
 static int sys_halt (void);
@@ -24,6 +25,8 @@ static int sys_create (const char *ufile, unsigned initial_size);
 static int sys_remove (const char *ufile);
 static int sys_open (const char *ufile);
 static int sys_filesize (int handle);
+static int sys_mmap(int handle, void *addr);
+static int sys_munmap(mapid_t mapid);
 static int sys_read (int handle, void *udst_, unsigned size);
 static int sys_write (int handle, void *usrc_, unsigned size);
 static int sys_seek (int handle, unsigned position);
@@ -70,6 +73,8 @@ syscall_handler (struct intr_frame *f)
       {2, (syscall_function *) sys_seek},
       {1, (syscall_function *) sys_tell},
       {1, (syscall_function *) sys_close},
+      {2, (syscall_function *) sys_mmap},
+      {2, (syscall_function *) sys_munmap}
     };
 
   const struct syscall *sc;
@@ -311,6 +316,73 @@ sys_filesize (int handle)
   lock_release (&fs_lock);
  
   return size;
+}
+
+/* Memory map a file */
+static int sys_mmap(int handle, void *addr){
+	if(addr == NULL)
+		return MAP_FAILED;
+	if(addr >= PHYS_BASE - STACK_MAX)
+		return MAP_FAILED;
+	if(pg_ofs(addr) != 0)
+		return MAP_FAILED;
+	if(is_user_vaddr(addr)==false)
+		return MAP_FAILED;
+	if(page_for_addr(addr) != NULL)
+		return MAP_FAILED;
+	mapid_t mapping = -1;
+	struct thread *cur = thread_current();
+	cur->mapping++;
+	mapping = cur->mapping;
+	struct file_descriptor *fd = lookup_fd(handle);
+	struct file *file = file_reopen(fd->file);
+	off_t read_bytes = file_length(file);
+	off_t ofs = 0;
+	bool writable = true;
+	while (read_bytes > 0 ) 
+    {
+      /* Calculate how to fill this page.
+         We will read PAGE_READ_BYTES bytes from FILE
+         and zero the final PAGE_ZERO_BYTES bytes. */
+		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+		
+		if(page_allocate_file(addr, file, ofs, page_read_bytes, page_zero_bytes, writable)==true){
+			//printf("mapped address %x........\n",addr);
+			struct mmap_file *map = (struct mmap_file *)malloc(sizeof(struct mmap_file));
+			map->mapping = mapping;
+			map->page = page_for_addr (addr);
+			list_push_back(&cur->mmap_list, &map->list_elem);
+		}
+   
+      /* Advance. */
+      read_bytes -= page_read_bytes;
+      ofs += page_read_bytes;
+      addr += PGSIZE;
+    }
+    //printf("returning map id %d.......\n",mapping);
+    return mapping;
+}
+
+/* Unmap a memory mapped file */
+static int sys_munmap(mapid_t mapid){
+	struct mmap_file *map;
+	struct list_elem *e;
+	struct thread *cur = thread_current();
+	
+	for (e = list_begin(&cur->mmap_list); e != list_end(&cur->mmap_list) ;e = list_next(e)){
+		map = list_entry (e, struct mmap_file, list_elem);
+		if(map->mapping == mapid){
+			if(map->page->isloaded == true){
+				if (pagedir_is_dirty(cur->pagedir, map->page->addr) == true){
+					file_write_at(map->page->file, map->page->addr,map->page->read_bytes, map->page->ofs);
+				}
+			}
+			page_deallocate(map->page->addr);
+			list_remove(&map->list_elem);
+			break;
+		}
+    }
 }
  
 /* Read system call. */

@@ -164,7 +164,10 @@ page_fault (struct intr_frame *f)
   bool page_loaded = false;
   if(fault_addr < PHYS_BASE && not_present == true){
 	  //printf("fault address is %x.........\n",fault_addr);
-	page_loaded = page_in(fault_addr);
+	if(fault_addr >= PHYS_BASE - STACK_MAX)
+		page_loaded = page_grow_stack(fault_addr);
+	else
+		page_loaded = page_in(fault_addr);
   }
   if(page_loaded == false){
 	printf ("Page fault at %p: %s error %s page in %s context.\n",

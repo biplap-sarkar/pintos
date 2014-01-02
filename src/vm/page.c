@@ -12,8 +12,7 @@
 #include "threads/vaddr.h"
 #include "userprog/syscall.h"
 
-/* Maximum size of process stack, in bytes. */
-#define STACK_MAX (1024 * 1024)
+
 
 /* Destroys a page, which must be in the current process's
    page table.  Used as a callback for hash_destroy(). */
@@ -103,8 +102,31 @@ page_in_from_swap (struct page *p){
 	//printf("page_in_from_swap().............\n");
 	p->frame = frame_alloc(p);
 	swap_in(p);
-	install_page(p->addr, p->frame->base, p->writable); 
+	if(!install_page(p->addr, p->frame->base, p->writable)){
+		frame_free(p->frame);
+		return false;
+	} 
 	p->isloaded = true;
+	return true;
+}
+
+/* Grows the stack. Fails if virtual address is already mapped */
+bool page_grow_stack(void *vaddr){
+	//printf("page_grow_stack().................\n");
+	struct page *newpage = page_allocate(pg_round_down(vaddr), true);
+	if(newpage == NULL)
+		return false;
+	// allocate a frame
+	newpage->frame = frame_alloc(newpage);
+	
+	if(!install_page(newpage->addr, newpage->frame->base, newpage->writable)){
+		//printf("install error............\n");
+		frame_free(newpage->frame);
+		free(newpage);
+		return false;
+	}
+	//printf("stack page installed...........\n");
+	newpage->isloaded = true;
 	return true;
 }
 
@@ -159,8 +181,18 @@ bool page_allocate_file (void *vaddr, struct file *file, off_t ofs,
 /* Evicts the page containing address VADDR
    and removes it from the page table. */
 void
-page_deallocate (void *vaddr) 
-{
+page_deallocate (void *vaddr) {
+	//printf("deallocating page %x........\n",vaddr);
+	struct page *p = page_for_addr(vaddr);
+	struct hash_elem *e = hash_delete(&thread_current()->spt, &p->hash_elem);
+	if(e != NULL){
+		if(p->isloaded == true){
+			palloc_free_page(p->frame->base);
+		}
+		if(pagedir_get_page(thread_current()->pagedir, p->addr) != NULL)
+			pagedir_clear_page(thread_current()->pagedir, p->addr);
+	}
+	free(p);
 }
 
 /* Returns a hash value for the page that E refers to. */

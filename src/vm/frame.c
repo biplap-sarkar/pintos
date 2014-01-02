@@ -8,6 +8,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "vm/swap.h"
 #include <list.h>
 
 static struct list frames;			/* Single instance of Frame list */

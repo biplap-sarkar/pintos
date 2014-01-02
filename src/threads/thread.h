@@ -6,6 +6,7 @@
 #include <hash.h>
 #include <stdint.h>
 #include "threads/synch.h"
+#include "vm/mmap.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -100,6 +101,9 @@ struct thread
     struct list_elem elem;              /* List element. */
     
     struct hash spt;					/* Supplementary page table */
+    
+    struct list mmap_list;				/* List of memory mapped entries */
+	mapid_t mapping;					/* Next available mmap id */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

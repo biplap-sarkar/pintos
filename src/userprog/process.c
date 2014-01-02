@@ -76,6 +76,10 @@ start_process (void *exec_)
   
   // Initialize page table
   page_table_init(&thread_current()->spt);
+  
+  /* Initialize mmap list */
+  list_init(&thread_current()->mmap_list);
+  thread_current()->mapping = 0;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -162,6 +166,24 @@ process_wait (tid_t child_tid)
   return -1;
 }
 
+/* Unmap all memory mapped files */
+static int munmap_all(){
+	struct mmap_file *map;
+	struct list_elem *e;
+	struct thread *cur = thread_current();
+	
+	for (e = list_begin(&cur->mmap_list); e != list_end(&cur->mmap_list) ;e = list_next(e)){
+		map = list_entry (e, struct mmap_file, list_elem);
+		if(map->page->isloaded == true){
+				if (pagedir_is_dirty(cur->pagedir, map->page->addr) == true){
+					file_write_at(map->page->file, map->page->addr,map->page->read_bytes, map->page->ofs);
+				}
+		}
+		page_deallocate(map->page->addr);
+		list_remove(&map->list_elem);
+    }
+}
+
 /* Free the current process's resources. */
 void
 process_exit (void)
@@ -190,6 +212,10 @@ process_exit (void)
       next = list_remove (e);
       release_child (cs);
     }
+    
+  /* Destroy mmap list */
+  munmap_all();
+  
   /* Destroy current process's supplementary page table */
   page_exit();
   
