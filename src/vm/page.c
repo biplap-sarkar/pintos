@@ -111,7 +111,9 @@ page_in_from_swap (struct page *p){
 }
 
 /* Grows the stack. Fails if virtual address is already mapped */
-bool page_grow_stack(void *vaddr){
+bool page_grow_stack(void *vaddr, void *esp){
+	if(vaddr < esp-32)
+		return false;
 	//printf("page_grow_stack().................\n");
 	struct page *newpage = page_allocate(pg_round_down(vaddr), true);
 	if(newpage == NULL)

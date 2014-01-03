@@ -43,7 +43,7 @@ bool page_allocate_file (void *vaddr, struct file *file, off_t ofs,
 	uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 void page_deallocate (void *vaddr);
 
-bool page_grow_stack(void *vaddr);
+bool page_grow_stack(void *vaddr, void *esp);
 struct page *page_for_addr (const void *address);
 void page_table_init (struct hash *spt);
 bool page_in (void *fault_addr);
